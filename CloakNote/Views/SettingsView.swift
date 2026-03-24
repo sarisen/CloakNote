@@ -20,7 +20,9 @@ struct SettingsView: View {
                 .tabItem { Label(languageManager.dataTab, systemImage: "externaldrive") }
         }
         .frame(minWidth: 480, minHeight: 320)
-        .onAppear { viewModel.load(from: appState.syncService, appState: appState) }
+        .onAppear {
+            Task { await viewModel.load(from: appState.syncService, appState: appState) }
+        }
     }
 
     private var githubTab: some View {
@@ -34,7 +36,9 @@ struct SettingsView: View {
             Section {
                 HStack {
                     Button(languageManager.saveBtn) {
-                        try? viewModel.save(to: appState.syncService)
+                        Task {
+                            try? await viewModel.save(to: appState.syncService, passphrase: appState.passphrase)
+                        }
                     }
                     Button(languageManager.testBtn) {
                         Task { await viewModel.testConnection(syncService: appState.syncService) }

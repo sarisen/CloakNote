@@ -81,6 +81,7 @@ final class LanguageManager {
     var moodLabel: String { tr ? "Ruh hali:" : "Mood:" }
     var tagPlaceholder: String { tr ? "+ etiket" : "+ tag" }
     var dateChange: String { tr ? "değiştir" : "change" }
+    var keyDerivationFailed: String { tr ? "Anahtar türetilemedi" : "Could not derive encryption key" }
 
     // MARK: - Empty State
     var emptyTitle: String { tr ? "Yeni bir güne başla" : "Start a new day" }
@@ -220,6 +221,13 @@ final class LanguageManager {
             return tr ? "Türkçe" : "Turkish"
         case .english:
             return tr ? "İngilizce" : "English"
+        }
+    }
+
+    func languageCode(_ language: AppLanguage) -> String {
+        switch language {
+        case .turkish: return "TR"
+        case .english: return "EN"
         }
     }
 

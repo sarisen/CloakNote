@@ -5,28 +5,38 @@ final class SyncService {
     let github = GitHubService()
     let localDrafts = LocalDraftStore()
 
-    struct GitHubConfig: Codable {
+    struct GitHubConfig {
         let token: String
         let owner: String
         let repo: String
     }
 
-    func loadGitHubConfig() -> Bool {
-        guard let config = readGitHubConfig() else {
+    private struct StoredGitHubConfig: Codable {
+        let token: EncryptedSecret
+        let owner: String
+        let repo: String
+    }
+
+    func hasGitHubConfig() -> Bool {
+        FileManager.default.fileExists(atPath: configURL.path)
+    }
+
+    func loadGitHubConfig(passphrase: String) async -> Bool {
+        guard let config = await readGitHubConfig(passphrase: passphrase) else {
             return false
         }
         github.configure(token: config.token, owner: config.owner, repo: config.repo)
         return true
     }
 
-    func saveGitHubConfig(token: String, owner: String, repo: String) throws {
+    func saveGitHubConfig(token: String, owner: String, repo: String, passphrase: String) async throws {
         let config = GitHubConfig(token: token, owner: owner, repo: repo)
-        try persistGitHubConfig(config)
+        try await persistGitHubConfig(config, passphrase: passphrase)
         github.configure(token: token, owner: owner, repo: repo)
     }
 
-    func currentGitHubConfig() -> GitHubConfig? {
-        readGitHubConfig()
+    func currentGitHubConfig(passphrase: String) async -> GitHubConfig? {
+        await readGitHubConfig(passphrase: passphrase)
     }
 
     func loadLocalDrafts(passphrase: String) async -> [JournalEntry] {
@@ -54,10 +64,7 @@ final class SyncService {
                 let payload = try JSONDecoder().decode(EncryptedPayload.self, from: Data(content.utf8))
                 let entry = try await crypto.decrypt(payload: payload, passphrase: passphrase)
                 entries.append(entry)
-            } catch {
-                // Bozuk veya farklı passphrase ile şifrelenmiş dosyayı atla
-                print("Skipping \(file.name): \(error)")
-            }
+            } catch { }
         }
         let encFiles = files.filter { $0.name.hasSuffix(".enc.json") }
         // Dosya var ama hiçbiri açılamadıysa → büyük ihtimal yanlış passphrase
@@ -125,15 +132,21 @@ final class SyncService {
         return f
     }()
 
-    private func readGitHubConfig() -> GitHubConfig? {
-        guard let data = try? Data(contentsOf: configURL) else { return nil }
-        return try? JSONDecoder().decode(GitHubConfig.self, from: data)
+    private func readGitHubConfig(passphrase: String) async -> GitHubConfig? {
+        guard let data = try? Data(contentsOf: configURL),
+              let stored = try? JSONDecoder().decode(StoredGitHubConfig.self, from: data),
+              let token = try? await crypto.decryptSecret(stored.token, passphrase: passphrase) else {
+            return nil
+        }
+        return GitHubConfig(token: token, owner: stored.owner, repo: stored.repo)
     }
 
-    private func persistGitHubConfig(_ config: GitHubConfig) throws {
+    private func persistGitHubConfig(_ config: GitHubConfig, passphrase: String) async throws {
         let directory = configURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(config)
+        let encryptedToken = try await crypto.encryptSecret(config.token, passphrase: passphrase)
+        let stored = StoredGitHubConfig(token: encryptedToken, owner: config.owner, repo: config.repo)
+        let data = try JSONEncoder().encode(stored)
         try data.write(to: configURL, options: .atomic)
     }
 

@@ -140,6 +140,20 @@ final class AppState {
         self.isLoading = true
         self.errorMessage = nil
         let localEntries = await syncService.loadLocalDrafts(passphrase: passphrase)
+        guard await syncService.loadGitHubConfig(passphrase: passphrase) else {
+            if !syncService.hasGitHubConfig() {
+                isLocked = false
+                lastActivityDate = Date()
+                startAutoLockTimer()
+                startDraftSyncTimer()
+                self.isLoading = false
+                return
+            }
+            self.errorMessage = LanguageManager().wrongPassphrase
+            self.passphrase = ""
+            self.isLoading = false
+            return
+        }
         do {
             let remoteEntries = try await syncService.fetchAllEntries(passphrase: passphrase)
             entries = mergeEntries(remoteEntries, with: localEntries)
@@ -259,7 +273,7 @@ final class AppState {
     }
 
     func checkFirstLaunch() {
-        isFirstLaunch = !syncService.loadGitHubConfig()
+        isFirstLaunch = !syncService.hasGitHubConfig()
     }
 
     private func mergeEntries(_ remoteEntries: [JournalEntry], with localEntries: [JournalEntry]) -> [JournalEntry] {

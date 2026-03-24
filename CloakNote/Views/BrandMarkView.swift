@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BrandMarkView: View {
+    @Environment(LanguageManager.self) var languageManager
     let size: CGFloat
     var showsTitle = true
 
@@ -15,7 +16,7 @@ struct BrandMarkView: View {
                 .shadow(color: .black.opacity(0.14), radius: size * 0.12, y: size * 0.05)
 
             if showsTitle {
-                Text("CloakNote")
+                Text(languageManager.appName)
                     .font(.system(size: max(18, size * 0.22), weight: .bold, design: .rounded))
             }
         }

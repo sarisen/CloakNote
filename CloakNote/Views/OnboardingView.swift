@@ -108,7 +108,7 @@ struct OnboardingView: View {
                                 Text(languageManager.languageName(language))
                                     .font(.headline)
                                     .foregroundStyle(.primary)
-                                Text(language == .turkish ? "TR" : "EN")
+                                Text(languageManager.languageCode(language))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -312,8 +312,12 @@ struct OnboardingView: View {
     }
 
     private func completeOnboarding() {
-        try? appState.syncService.saveGitHubConfig(token: token, owner: owner, repo: repo)
-        appState.isFirstLaunch = false
-        appState.isLocked = false  // passphrase zaten appState'e set edildi, tekrar sorma
+        Task {
+            try? await appState.syncService.saveGitHubConfig(token: token, owner: owner, repo: repo, passphrase: appState.passphrase)
+            await MainActor.run {
+                appState.isFirstLaunch = false
+                appState.isLocked = false
+            }
+        }
     }
 }

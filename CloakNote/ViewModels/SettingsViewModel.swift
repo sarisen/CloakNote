@@ -39,8 +39,8 @@ final class SettingsViewModel {
         }
     }
 
-    func load(from syncService: SyncService, appState: AppState) {
-        let config = syncService.currentGitHubConfig()
+    func load(from syncService: SyncService, appState: AppState) async {
+        let config = await syncService.currentGitHubConfig(passphrase: appState.passphrase)
         token = config?.token ?? ""
         owner = config?.owner ?? ""
         repo = config?.repo ?? ""
@@ -49,8 +49,8 @@ final class SettingsViewModel {
         syncInterval = appState.syncInterval
     }
 
-    func save(to syncService: SyncService) throws {
-        try syncService.saveGitHubConfig(token: token, owner: owner, repo: repo)
+    func save(to syncService: SyncService, passphrase: String) async throws {
+        try await syncService.saveGitHubConfig(token: token, owner: owner, repo: repo, passphrase: passphrase)
     }
 
     func testConnection(syncService: SyncService) async {
