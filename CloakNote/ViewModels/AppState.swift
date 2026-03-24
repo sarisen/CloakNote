@@ -2,22 +2,36 @@ import Foundation
 import SwiftUI
 import AppKit
 
-actor EntrySaveCoordinator {
+actor SaveCoordinator {
     private var latestByID: [UUID: JournalEntry] = [:]
-    private var activeIDs: Set<UUID> = []
+    private var orderedIDs: [UUID] = []
+    private var isProcessing = false
 
-    func startIfNeeded(with entry: JournalEntry) -> JournalEntry? {
+    func enqueue(_ entry: JournalEntry) -> JournalEntry? {
         latestByID[entry.id] = entry
-        guard !activeIDs.contains(entry.id) else { return nil }
-        activeIDs.insert(entry.id)
-        return latestByID.removeValue(forKey: entry.id)
+        if !orderedIDs.contains(entry.id) {
+            orderedIDs.append(entry.id)
+        }
+        guard !isProcessing else { return nil }
+        isProcessing = true
+        return dequeueNext()
     }
 
-    func nextOrFinish(for id: UUID) -> JournalEntry? {
-        if let next = latestByID.removeValue(forKey: id) {
+    func next() -> JournalEntry? {
+        if let next = dequeueNext() {
             return next
         }
-        activeIDs.remove(id)
+        isProcessing = false
+        return nil
+    }
+
+    private func dequeueNext() -> JournalEntry? {
+        while let id = orderedIDs.first {
+            orderedIDs.removeFirst()
+            if let entry = latestByID.removeValue(forKey: id) {
+                return entry
+            }
+        }
         return nil
     }
 }
@@ -41,8 +55,9 @@ final class AppState {
     // Auto-lock
     var autoLockInterval: TimeInterval = 1800
     private var autoLockTask: Task<Void, Never>?
+    private var draftSyncTask: Task<Void, Never>?
     private var lastActivityDate = Date()
-    private let saveCoordinator = EntrySaveCoordinator()
+    private let saveCoordinator = SaveCoordinator()
 
     let syncService = SyncService()
 
@@ -86,23 +101,37 @@ final class AppState {
         self.passphrase = passphrase
         self.isLoading = true
         self.errorMessage = nil
+        let localEntries = await syncService.loadLocalDrafts(passphrase: passphrase)
         do {
-            entries = try await syncService.fetchAllEntries(passphrase: passphrase)
+            let remoteEntries = try await syncService.fetchAllEntries(passphrase: passphrase)
+            entries = mergeEntries(remoteEntries, with: localEntries)
             isLocked = false
             lastActivityDate = Date()
             startAutoLockTimer()
+            startDraftSyncTimer()
+            await flushPendingDrafts()
         } catch is CryptoService.CryptoError {
             self.decryptionFailed = true
             self.passphrase = ""
         } catch {
-            self.errorMessage = LanguageManager().genericError(error.localizedDescription)
-            self.passphrase = ""
+            if !localEntries.isEmpty {
+                entries = localEntries
+                isLocked = false
+                lastActivityDate = Date()
+                syncStatus = .error(error.localizedDescription)
+                startAutoLockTimer()
+                startDraftSyncTimer()
+            } else {
+                self.errorMessage = LanguageManager().genericError(error.localizedDescription)
+                self.passphrase = ""
+            }
         }
         self.isLoading = false
     }
 
     func lock() {
         autoLockTask?.cancel()
+        draftSyncTask?.cancel()
         isLocked = true
         passphrase = ""
         entries = []
@@ -128,6 +157,17 @@ final class AppState {
         }
     }
 
+    private func startDraftSyncTimer() {
+        draftSyncTask?.cancel()
+        draftSyncTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled, !isLocked, !passphrase.isEmpty else { return }
+                await flushPendingDrafts()
+            }
+        }
+    }
+
     func createNewEntry() -> JournalEntry {
         let entry = JournalEntry()
         entries.insert(entry, at: 0)
@@ -141,17 +181,25 @@ final class AppState {
             entries[idx] = entry
         }
 
-        var pendingEntry = await saveCoordinator.startIfNeeded(with: entry)
+        do {
+            try await syncService.saveLocalDraft(entry, passphrase: passphrase)
+        } catch {
+            syncStatus = .error(error.localizedDescription)
+            return
+        }
+
+        var pendingEntry = await saveCoordinator.enqueue(entry)
 
         while let entryToSave = pendingEntry {
             syncStatus = .syncing
             do {
                 try await syncService.saveEntry(entryToSave, passphrase: passphrase)
+                await syncService.removeLocalDraftIfSynced(entryToSave, passphrase: passphrase)
                 syncStatus = .synced
             } catch {
                 syncStatus = .error(error.localizedDescription)
             }
-            pendingEntry = await saveCoordinator.nextOrFinish(for: entry.id)
+            pendingEntry = await saveCoordinator.next()
         }
     }
 
@@ -160,6 +208,7 @@ final class AppState {
         if selectedEntryId == entry.id {
             selectedEntryId = entries.first?.id
         }
+        syncService.removeLocalDraft(entry)
         do {
             try await syncService.deleteEntry(entry)
         } catch {
@@ -171,4 +220,25 @@ final class AppState {
         isFirstLaunch = !syncService.loadGitHubConfig()
     }
 
+    private func mergeEntries(_ remoteEntries: [JournalEntry], with localEntries: [JournalEntry]) -> [JournalEntry] {
+        var merged = Dictionary(uniqueKeysWithValues: remoteEntries.map { ($0.id, $0) })
+
+        for local in localEntries {
+            if let remote = merged[local.id] {
+                merged[local.id] = local.modifiedAt >= remote.modifiedAt ? local : remote
+            } else {
+                merged[local.id] = local
+            }
+        }
+
+        return merged.values.sorted { $0.date > $1.date }
+    }
+
+    private func flushPendingDrafts() async {
+        guard !passphrase.isEmpty else { return }
+        let drafts = await syncService.loadLocalDrafts(passphrase: passphrase)
+        for draft in drafts {
+            await saveEntry(draft)
+        }
+    }
 }

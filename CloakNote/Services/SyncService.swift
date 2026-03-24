@@ -3,6 +3,7 @@ import Foundation
 final class SyncService {
     let crypto = CryptoService()
     let github = GitHubService()
+    let localDrafts = LocalDraftStore()
 
     struct GitHubConfig: Codable {
         let token: String
@@ -26,6 +27,22 @@ final class SyncService {
 
     func currentGitHubConfig() -> GitHubConfig? {
         readGitHubConfig()
+    }
+
+    func loadLocalDrafts(passphrase: String) async -> [JournalEntry] {
+        (try? await localDrafts.loadAll(passphrase: passphrase)) ?? []
+    }
+
+    func saveLocalDraft(_ entry: JournalEntry, passphrase: String) async throws {
+        try await localDrafts.save(entry: entry, passphrase: passphrase)
+    }
+
+    func removeLocalDraftIfSynced(_ entry: JournalEntry, passphrase: String) async {
+        try? await localDrafts.removeIfMatching(entry, passphrase: passphrase)
+    }
+
+    func removeLocalDraft(_ entry: JournalEntry) {
+        try? localDrafts.remove(id: entry.id)
     }
 
     func fetchAllEntries(passphrase: String) async throws -> [JournalEntry] {
@@ -60,20 +77,21 @@ final class SyncService {
         let title = entry.title.isEmpty ? languageManager.untitled : String(entry.title.prefix(50))
         let message = "\(languageManager.saveCommitPrefix): \(dateStr) - \(title)"
 
-        // 409 conflict olursa fresh SHA çekip tekrar dene (max 3 deneme)
-        for attempt in 0..<3 {
+        // Repo-level writes can race on GitHub's Contents API, so always retry with
+        // the latest remote SHA before surfacing an error.
+        for attempt in 0..<10 {
             let existingSha = try? await github.fetchEntry(filename: filename).sha
             do {
                 try await github.pushEntry(filename: filename, content: jsonString, sha: existingSha, message: message)
                 return
             } catch GitHubService.GitHubError.apiError(let status, _) where status == 409 || status == 422 {
-                if attempt == 2 {
+                if attempt == 9 {
                     throw GitHubService.GitHubError.apiError(
                         statusCode: status,
                         message: languageManager.unresolvedConflictError(attempts: attempt + 1)
                     )
                 }
-                try? await Task.sleep(for: .milliseconds(300))
+                try? await Task.sleep(for: .milliseconds(250))
             }
         }
     }
