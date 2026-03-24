@@ -31,9 +31,10 @@ final class SettingsViewModel {
     }
 
     func load(from syncService: SyncService) {
-        token = syncService.keychain.retrieve(key: SyncService.tokenKey) ?? ""
-        owner = syncService.keychain.retrieve(key: SyncService.ownerKey) ?? ""
-        repo = syncService.keychain.retrieve(key: SyncService.repoKey) ?? ""
+        let config = syncService.currentGitHubConfig()
+        token = config?.token ?? ""
+        owner = config?.owner ?? ""
+        repo = config?.repo ?? ""
     }
 
     func save(to syncService: SyncService) throws {

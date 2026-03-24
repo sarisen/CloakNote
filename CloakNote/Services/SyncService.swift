@@ -3,27 +3,29 @@ import Foundation
 final class SyncService {
     let crypto = CryptoService()
     let github = GitHubService()
-    let keychain = KeychainService()
 
-    static let tokenKey = "github_token"
-    static let ownerKey = "github_owner"
-    static let repoKey = "github_repo"
+    struct GitHubConfig: Codable {
+        let token: String
+        let owner: String
+        let repo: String
+    }
 
     func loadGitHubConfig() -> Bool {
-        guard let token = keychain.retrieve(key: Self.tokenKey),
-              let owner = keychain.retrieve(key: Self.ownerKey),
-              let repo = keychain.retrieve(key: Self.repoKey) else {
+        guard let config = readGitHubConfig() else {
             return false
         }
-        github.configure(token: token, owner: owner, repo: repo)
+        github.configure(token: config.token, owner: config.owner, repo: config.repo)
         return true
     }
 
     func saveGitHubConfig(token: String, owner: String, repo: String) throws {
-        try keychain.save(key: Self.tokenKey, value: token)
-        try keychain.save(key: Self.ownerKey, value: owner)
-        try keychain.save(key: Self.repoKey, value: repo)
+        let config = GitHubConfig(token: token, owner: owner, repo: repo)
+        try persistGitHubConfig(config)
         github.configure(token: token, owner: owner, repo: repo)
+    }
+
+    func currentGitHubConfig() -> GitHubConfig? {
+        readGitHubConfig()
     }
 
     func fetchAllEntries(passphrase: String) async throws -> [JournalEntry] {
@@ -93,4 +95,23 @@ final class SyncService {
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
+
+    private func readGitHubConfig() -> GitHubConfig? {
+        guard let data = try? Data(contentsOf: configURL) else { return nil }
+        return try? JSONDecoder().decode(GitHubConfig.self, from: data)
+    }
+
+    private func persistGitHubConfig(_ config: GitHubConfig) throws {
+        let directory = configURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let data = try JSONEncoder().encode(config)
+        try data.write(to: configURL, options: .atomic)
+    }
+
+    private var configURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport
+            .appendingPathComponent(Constants.appName, isDirectory: true)
+            .appendingPathComponent("github-config.json", isDirectory: false)
+    }
 }
