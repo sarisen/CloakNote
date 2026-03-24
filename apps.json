@@ -1,0 +1,58 @@
+{
+  "$schema": "https://wvw.dev/apps.schema.json",
+  "store": {
+    "name": "Serafettin Sarisen",
+    "developer": "Serafettin Sarisen",
+    "tagline": "",
+    "github": "https://github.com/sarisen"
+  },
+  "categories": [
+    {
+      "id": "macos",
+      "name": "macOS Apps"
+    },
+    {
+      "id": "productivity",
+      "name": "Productivity"
+    }
+  ],
+  "apps": [
+    {
+      "id": "sarisen-cloaknote",
+      "name": "CloakNote",
+      "developer": "Serafettin Sarisen",
+      "subtitle": "Encrypted notes with GitHub sync",
+      "description": "An encrypted macOS notes app that stores your notes in your own private GitHub repository.",
+      "longDescription": "CloakNote is an encrypted macOS notes app that syncs to your private GitHub repository. Notes are encrypted locally before upload, and your passphrase never leaves your Mac. CloakNote supports Turkish and English, auto-lock, themes, local draft protection, and background sync at configurable intervals. Your notes remain unreadable on GitHub without your passphrase.",
+      "icon": "https://raw.githubusercontent.com/sarisen/CloakNote/refs/heads/main/docs/logo.png",
+      "iconEmoji": "🔒",
+      "iconStyle": {
+        "scale": 1.15,
+        "objectFit": "cover",
+        "borderRadius": "22%"
+      },
+      "category": [
+        "macos",
+        "productivity"
+      ],
+      "platform": "macOS",
+      "price": "Free",
+      "github": "https://github.com/sarisen/CloakNote",
+      "brew": "brew install sarisen/cloaknote/cloaknote",
+      "downloadUrl": "https://github.com/sarisen/CloakNote/releases/latest",
+      "language": "Swift",
+      "requirements": "macOS",
+      "features": [
+        "Encrypts notes locally before upload",
+        "Stores data in your own private GitHub repository",
+        "Passphrase never leaves your Mac",
+        "Background sync at configurable intervals",
+        "Local draft protection to reduce data loss",
+        "Auto-lock support",
+        "Turkish and English language support",
+        "Theme support",
+        "Homebrew installation support"
+      ]
+    }
+  ]
+}
