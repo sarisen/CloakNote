@@ -14,13 +14,13 @@ struct SettingsView: View {
                 .tabItem { Label(languageManager.githubTab, systemImage: "network") }
             securityTab
                 .tabItem { Label(languageManager.securityTab, systemImage: "lock.shield") }
-            appearanceTab
-                .tabItem { Label(languageManager.appearanceTab, systemImage: "paintbrush") }
+            generalTab
+                .tabItem { Label(languageManager.generalTab, systemImage: "gearshape") }
             dataTab
                 .tabItem { Label(languageManager.dataTab, systemImage: "externaldrive") }
         }
         .frame(minWidth: 480, minHeight: 320)
-        .onAppear { viewModel.load(from: appState.syncService) }
+        .onAppear { viewModel.load(from: appState.syncService, appState: appState) }
     }
 
     private var githubTab: some View {
@@ -105,7 +105,7 @@ struct SettingsView: View {
         .frame(minWidth: 360)
     }
 
-    private var appearanceTab: some View {
+    private var generalTab: some View {
         @Bindable var bindableLanguageManager = languageManager
         return Form {
             Section(languageManager.themeLabel) {
@@ -127,6 +127,16 @@ struct SettingsView: View {
                 }
                 .onChange(of: viewModel.autoLockInterval) { _, newValue in
                     appState.autoLockInterval = newValue
+                }
+            }
+            Section(languageManager.syncIntervalLabel) {
+                Picker(languageManager.durationLabel, selection: $viewModel.syncInterval) {
+                    ForEach(languageManager.syncIntervalOptions, id: \.1) { label, interval in
+                        Text(label).tag(interval)
+                    }
+                }
+                .onChange(of: viewModel.syncInterval) { _, newValue in
+                    appState.syncInterval = newValue
                 }
             }
             Section(languageManager.languageSection) {

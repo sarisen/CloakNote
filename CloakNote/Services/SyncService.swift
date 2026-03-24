@@ -86,10 +86,21 @@ final class SyncService {
                 return
             } catch GitHubService.GitHubError.apiError(let status, _) where status == 409 || status == 422 {
                 if attempt == 9 {
-                    throw GitHubService.GitHubError.apiError(
-                        statusCode: status,
-                        message: languageManager.unresolvedConflictError(attempts: attempt + 1)
+                    if let latestSha = try? await github.fetchEntry(filename: filename).sha {
+                        try? await github.deleteEntry(
+                            filename: filename,
+                            sha: latestSha,
+                            message: "\(languageManager.saveCommitPrefix): \(dateStr) - \(title) [reset]"
+                        )
+                    }
+
+                    try await github.pushEntry(
+                        filename: filename,
+                        content: jsonString,
+                        sha: nil,
+                        message: message
                     )
+                    return
                 }
                 try? await Task.sleep(for: .milliseconds(250))
             }

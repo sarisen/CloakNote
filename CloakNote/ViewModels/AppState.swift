@@ -38,6 +38,12 @@ actor SaveCoordinator {
 
 @Observable
 final class AppState {
+    private enum DefaultsKey {
+        static let colorScheme = "appColorScheme"
+        static let autoLockInterval = "autoLockInterval"
+        static let syncInterval = "syncInterval"
+    }
+
     var isLocked = true
     var isFirstLaunch = false
     var passphrase: String = ""
@@ -50,10 +56,29 @@ final class AppState {
     var decryptionFailed = false
 
     // Tema
-    var colorScheme: ColorScheme? = nil
+    var colorScheme: ColorScheme? = nil {
+        didSet {
+            UserDefaults.standard.set(SettingsViewModel.AppColorScheme.from(colorScheme).rawValue, forKey: DefaultsKey.colorScheme)
+        }
+    }
 
     // Auto-lock
-    var autoLockInterval: TimeInterval = 1800
+    var autoLockInterval: TimeInterval = 1800 {
+        didSet {
+            UserDefaults.standard.set(autoLockInterval, forKey: DefaultsKey.autoLockInterval)
+            if !isLocked {
+                startAutoLockTimer()
+            }
+        }
+    }
+    var syncInterval: TimeInterval = Constants.defaultSyncInterval {
+        didSet {
+            UserDefaults.standard.set(syncInterval, forKey: DefaultsKey.syncInterval)
+            if !isLocked {
+                startDraftSyncTimer()
+            }
+        }
+    }
     private var autoLockTask: Task<Void, Never>?
     private var draftSyncTask: Task<Void, Never>?
     private var lastActivityDate = Date()
@@ -62,6 +87,19 @@ final class AppState {
     let syncService = SyncService()
 
     init() {
+        if let savedColorScheme = UserDefaults.standard.string(forKey: DefaultsKey.colorScheme),
+           let scheme = SettingsViewModel.AppColorScheme(rawValue: savedColorScheme) {
+            colorScheme = scheme.colorScheme
+        }
+
+        if UserDefaults.standard.object(forKey: DefaultsKey.autoLockInterval) != nil {
+            autoLockInterval = UserDefaults.standard.double(forKey: DefaultsKey.autoLockInterval)
+        }
+
+        if UserDefaults.standard.object(forKey: DefaultsKey.syncInterval) != nil {
+            syncInterval = UserDefaults.standard.double(forKey: DefaultsKey.syncInterval)
+        }
+
         // Bilgisayar uyku/ekran kilidi → otomatik kilitle
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -109,7 +147,6 @@ final class AppState {
             lastActivityDate = Date()
             startAutoLockTimer()
             startDraftSyncTimer()
-            await flushPendingDrafts()
         } catch is CryptoService.CryptoError {
             self.decryptionFailed = true
             self.passphrase = ""
@@ -161,7 +198,7 @@ final class AppState {
         draftSyncTask?.cancel()
         draftSyncTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(syncInterval))
                 guard !Task.isCancelled, !isLocked, !passphrase.isEmpty else { return }
                 await flushPendingDrafts()
             }
@@ -175,7 +212,7 @@ final class AppState {
         return entry
     }
 
-    func saveEntry(_ entry: JournalEntry) async {
+    func saveEntry(_ entry: JournalEntry, syncNow: Bool = false) async {
         guard !passphrase.isEmpty else { return }
         if let idx = entries.firstIndex(where: { $0.id == entry.id }) {
             entries[idx] = entry
@@ -185,6 +222,11 @@ final class AppState {
             try await syncService.saveLocalDraft(entry, passphrase: passphrase)
         } catch {
             syncStatus = .error(error.localizedDescription)
+            return
+        }
+
+        guard syncNow else {
+            syncStatus = .idle
             return
         }
 
@@ -238,7 +280,7 @@ final class AppState {
         guard !passphrase.isEmpty else { return }
         let drafts = await syncService.loadLocalDrafts(passphrase: passphrase)
         for draft in drafts {
-            await saveEntry(draft)
+            await saveEntry(draft, syncNow: true)
         }
     }
 }

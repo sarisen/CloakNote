@@ -71,11 +71,11 @@ final class GitHubService {
         _ = try await request(url: url, method: "PUT", body: bodyData)
     }
 
-    func deleteEntry(filename: String, sha: String) async throws {
+    func deleteEntry(filename: String, sha: String, message: String? = nil) async throws {
         let languageManager = LanguageManager()
         let url = URL(string: "\(baseURL)/repos/\(owner)/\(repo)/contents/entries/\(filename)")!
         let body: [String: Any] = [
-            "message": "\(languageManager.deleteFileCommitPrefix): \(filename)",
+            "message": message ?? "\(languageManager.deleteFileCommitPrefix): \(filename)",
             "sha": sha
         ]
         let bodyData = try JSONSerialization.data(withJSONObject: body)

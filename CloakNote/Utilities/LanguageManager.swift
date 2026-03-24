@@ -171,7 +171,7 @@ final class LanguageManager {
     // MARK: - Settings
     var githubTab: String { "GitHub" }
     var securityTab: String { tr ? "Güvenlik" : "Security" }
-    var appearanceTab: String { tr ? "Görünüm" : "Appearance" }
+    var generalTab: String { tr ? "Genel" : "General" }
     var dataTab: String { tr ? "Veri" : "Data" }
     var changePassphraseBtn: String { tr ? "Passphrase Değiştir" : "Change Passphrase" }
     var changePassphraseTitle: String { tr ? "Passphrase Değiştir" : "Change Passphrase" }
@@ -183,6 +183,7 @@ final class LanguageManager {
     var successLabel: String { tr ? "Başarılı" : "Success" }
     var themeLabel: String { tr ? "Tema" : "Theme" }
     var autoLockLabel: String { tr ? "Otomatik Kilit" : "Auto-Lock" }
+    var syncIntervalLabel: String { tr ? "Senkronizasyon Aralığı" : "Sync Interval" }
     var durationLabel: String { tr ? "Süre" : "Duration" }
     var statisticsLabel: String { tr ? "İstatistikler" : "Statistics" }
     var totalNotes: String { tr ? "Toplam Not" : "Total Notes" }
@@ -197,6 +198,11 @@ final class LanguageManager {
     var autoLockOptions: [(String, TimeInterval)] {
         tr ? [("5 dakika", 300), ("15 dakika", 900), ("30 dakika", 1800), ("1 saat", 3600), ("Asla", 0)]
            : [("5 minutes", 300), ("15 minutes", 900), ("30 minutes", 1800), ("1 hour", 3600), ("Never", 0)]
+    }
+
+    var syncIntervalOptions: [(String, TimeInterval)] {
+        tr ? [("5 dakika", 300), ("15 dakika", 900), ("30 dakika", 1800), ("1 saat", 3600)]
+           : [("5 minutes", 300), ("15 minutes", 900), ("30 minutes", 1800), ("1 hour", 3600)]
     }
 
     var themeOptions: [(String, SettingsViewModel.AppColorScheme)] {

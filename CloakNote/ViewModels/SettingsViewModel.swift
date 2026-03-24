@@ -10,6 +10,7 @@ final class SettingsViewModel {
     var connectionTestResult: ConnectionResult? = nil
     var colorScheme: AppColorScheme = .system
     var autoLockInterval: TimeInterval = 1800
+    var syncInterval: TimeInterval = Constants.defaultSyncInterval
 
     enum ConnectionResult {
         case success
@@ -28,13 +29,24 @@ final class SettingsViewModel {
             case .dark: return .dark
             }
         }
+
+        static func from(_ colorScheme: ColorScheme?) -> Self {
+            switch colorScheme {
+            case .light: return .light
+            case .dark: return .dark
+            default: return .system
+            }
+        }
     }
 
-    func load(from syncService: SyncService) {
+    func load(from syncService: SyncService, appState: AppState) {
         let config = syncService.currentGitHubConfig()
         token = config?.token ?? ""
         owner = config?.owner ?? ""
         repo = config?.repo ?? ""
+        colorScheme = AppColorScheme.from(appState.colorScheme)
+        autoLockInterval = appState.autoLockInterval
+        syncInterval = appState.syncInterval
     }
 
     func save(to syncService: SyncService) throws {

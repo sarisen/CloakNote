@@ -58,7 +58,7 @@ final class EditorViewModel {
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(Constants.localDraftSaveDelay))
             guard !Task.isCancelled, self.isDirty else { return }
             await appState.saveEntry(self.entry)
             self.isDirty = false
