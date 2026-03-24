@@ -2,6 +2,26 @@ import Foundation
 import SwiftUI
 import AppKit
 
+actor EntrySaveCoordinator {
+    private var latestByID: [UUID: JournalEntry] = [:]
+    private var activeIDs: Set<UUID> = []
+
+    func startIfNeeded(with entry: JournalEntry) -> JournalEntry? {
+        latestByID[entry.id] = entry
+        guard !activeIDs.contains(entry.id) else { return nil }
+        activeIDs.insert(entry.id)
+        return latestByID.removeValue(forKey: entry.id)
+    }
+
+    func nextOrFinish(for id: UUID) -> JournalEntry? {
+        if let next = latestByID.removeValue(forKey: id) {
+            return next
+        }
+        activeIDs.remove(id)
+        return nil
+    }
+}
+
 @Observable
 final class AppState {
     var isLocked = true
@@ -22,6 +42,7 @@ final class AppState {
     var autoLockInterval: TimeInterval = 1800
     private var autoLockTask: Task<Void, Never>?
     private var lastActivityDate = Date()
+    private let saveCoordinator = EntrySaveCoordinator()
 
     let syncService = SyncService()
 
@@ -119,12 +140,18 @@ final class AppState {
         if let idx = entries.firstIndex(where: { $0.id == entry.id }) {
             entries[idx] = entry
         }
-        syncStatus = .syncing
-        do {
-            try await syncService.saveEntry(entry, passphrase: passphrase)
-            syncStatus = .synced
-        } catch {
-            syncStatus = .error(error.localizedDescription)
+
+        var pendingEntry = await saveCoordinator.startIfNeeded(with: entry)
+
+        while let entryToSave = pendingEntry {
+            syncStatus = .syncing
+            do {
+                try await syncService.saveEntry(entryToSave, passphrase: passphrase)
+                syncStatus = .synced
+            } catch {
+                syncStatus = .error(error.localizedDescription)
+            }
+            pendingEntry = await saveCoordinator.nextOrFinish(for: entry.id)
         }
     }
 
